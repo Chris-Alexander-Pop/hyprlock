@@ -2,6 +2,7 @@
 #include "../core/hyprlock.hpp"
 #include "../core/Dbus.hpp"
 #include "../helpers/Log.hpp"
+#include "../helpers/MiscFunctions.hpp"
 #include "../config/ConfigManager.hpp"
 
 #include <memory>
@@ -78,7 +79,7 @@ void CFingerprint::init() {
 
 void CFingerprint::handleInput(const std::string& input) {
     // Non-empty input is password auth — leave the parallel fingerprint session alone.
-    // Empty Enter re-claims the reader (often wedged after lid close / resume on Validity sensors).
+    // Empty Enter: USB-reset Validity (via fingerprint-wake.service) then re-claim.
     if (!input.empty())
         return;
 
@@ -87,18 +88,37 @@ void CFingerprint::handleInput(const std::string& input) {
         return;
     }
 
+    if (m_sDBUSState.waking) {
+        Log::logger->log(Log::INFO, "fprint: wake already in progress");
+        return;
+    }
+
     Log::logger->log(Log::INFO, "fprint: restarting verify on empty input");
 
+    m_sDBUSState.waking    = true;
     m_sDBUSState.abort     = false;
     m_sDBUSState.done      = false;
     m_sDBUSState.retries   = 0;
     m_sDBUSState.verifying = false;
     m_sFailureReason.clear();
-    m_sPrompt.clear();
+    m_sPrompt = "Waking fingerprint…";
+    g_pHyprlock->enqueueForceUpdateTimers();
 
     stopVerify();
     releaseDevice();
-    startVerify();
+
+    // Passwordless via polkit rule 50-fingerprint-wake.rules
+    spawnAsync("systemctl start --no-block fingerprint-wake.service");
+
+    // Validity USB init needs a couple seconds after reset before Claim works.
+    g_pHyprlock->addTimer(
+        std::chrono::milliseconds(3000),
+        [](ASP<CTimer> self, void* data) {
+            auto* fp                 = static_cast<CFingerprint*>(data);
+            fp->m_sDBUSState.waking = false;
+            fp->startVerify();
+        },
+        this);
 }
 
 std::optional<std::string> CFingerprint::getLastFailText() {

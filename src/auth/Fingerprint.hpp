@@ -31,6 +31,7 @@ class CFingerprint : public IAuthImplementation {
         int                            retries   = 0;
         bool                           sleeping  = false;
         bool                           verifying = false;
+        bool                           waking    = false;
     } m_sDBUSState;
 
     std::string m_sFingerprintReady;
