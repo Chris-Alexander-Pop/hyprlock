@@ -77,7 +77,28 @@ void CFingerprint::init() {
 }
 
 void CFingerprint::handleInput(const std::string& input) {
-    ;
+    // Non-empty input is password auth — leave the parallel fingerprint session alone.
+    // Empty Enter re-claims the reader (often wedged after lid close / resume on Validity sensors).
+    if (!input.empty())
+        return;
+
+    if (m_sDBUSState.sleeping) {
+        Log::logger->log(Log::INFO, "fprint: ignoring restart while preparing for sleep");
+        return;
+    }
+
+    Log::logger->log(Log::INFO, "fprint: restarting verify on empty input");
+
+    m_sDBUSState.abort     = false;
+    m_sDBUSState.done      = false;
+    m_sDBUSState.retries   = 0;
+    m_sDBUSState.verifying = false;
+    m_sFailureReason.clear();
+    m_sPrompt.clear();
+
+    stopVerify();
+    releaseDevice();
+    startVerify();
 }
 
 std::optional<std::string> CFingerprint::getLastFailText() {
