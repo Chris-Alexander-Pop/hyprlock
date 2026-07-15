@@ -4,7 +4,9 @@ This branch tracks [hyprwm/hyprlock](https://github.com/hyprwm/hyprlock) `main` 
 
 | Commit | Summary |
 |--------|---------|
-| `fingerprint: restart verify on empty Enter` | Empty Enter re-claims/restarts fprintd verify so a wedged reader (common after lid/resume on Validity/open-fprintd) can be woken without a PAM failure flash. |
+| `fingerprint: restart verify on empty Enter` | Empty Enter re-claims/restarts fprintd verify so a wedged reader can be woken without a PAM failure flash. |
+| `fingerprint: call restart via CAuth without removed getImpl` | Route empty-Enter through `CAuth::restartFingerprint` (upstream removed `getImpl`). |
+| `fingerprint: USB-reset Validity via fingerprint-wake on empty Enter` | Empty Enter starts `fingerprint-wake.service` (usbreset 06cb:009a + restart python3-validity/open-fprintd), then re-claims after 3s. |
 
 ## Updating from upstream
 
