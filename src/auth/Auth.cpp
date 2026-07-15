@@ -33,6 +33,13 @@ void CAuth::submitInput(const std::string& input) {
     g_pHyprlock->clearPasswordBuffer();
 }
 
+void CAuth::restartFingerprint() {
+    for (const auto& i : m_vImpls) {
+        if (i->getImplType() == AUTH_IMPL_FINGERPRINT)
+            i->handleInput("");
+    }
+}
+
 bool CAuth::checkWaiting() {
     return std::ranges::any_of(m_vImpls, [](const auto& i) { return i->checkWaiting(); });
 }
