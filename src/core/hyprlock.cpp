@@ -676,8 +676,7 @@ void CHyprlock::handleKeySym(xkb_keysym_t sym, bool composed) {
             Log::logger->log(Log::INFO, "Ignoring empty input");
             // Still restart fingerprint verify so Enter can wake a wedged reader
             // without triggering a PAM failure flash.
-            if (const auto fp = g_pAuth->getImpl(AUTH_IMPL_FINGERPRINT))
-                fp->handleInput("");
+            g_pAuth->restartFingerprint();
             return;
         }
 

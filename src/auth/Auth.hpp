@@ -33,6 +33,7 @@ class CAuth {
     void                       start();
 
     void                       submitInput(const std::string& input);
+    void                       restartFingerprint();
     bool                       checkWaiting();
 
     const std::string&         getCurrentFailText();
