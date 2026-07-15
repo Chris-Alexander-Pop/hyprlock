@@ -1,0 +1,42 @@
+name: Rebase patched onto upstream
+
+# Weekly sync of the patched branch with hyprwm/hyprlock main.
+# Fails (and emails you, if GitHub notifications are on) when patches conflict.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebase-patched-upstream
+  cancel-in-progress: false
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout patched branch
+        uses: actions/checkout@v4
+        with:
+          ref: patched
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream hyprlock main
+        run: |
+          git remote add upstream https://github.com/hyprwm/hyprlock.git
+          git fetch upstream main
+
+      - name: Rebase patched onto upstream/main
+        run: git rebase upstream/main
+
+      - name: Push rebased branch
+        run: git push --force-with-lease origin patched
