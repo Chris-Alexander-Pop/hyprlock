@@ -1,7 +1,7 @@
 name: Rebase patched onto upstream
 
 # Weekly sync of the patched branch with hyprwm/hyprlock main.
-# Fails (and emails you, if GitHub notifications are on) when patches conflict.
+# On conflict: fail the job and open/update a tracking issue so it is visible.
 
 on:
   schedule:
@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: rebase-patched-upstream
@@ -36,7 +37,70 @@ jobs:
           git fetch upstream main
 
       - name: Rebase patched onto upstream/main
-        run: git rebase upstream/main
+        id: rebase
+        run: |
+          set -euo pipefail
+          if git rebase upstream/main; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Conflicted files"
+              git diff --name-only --diff-filter=U || true
+              echo
+              echo "## Status"
+              git status || true
+            } >> "$GITHUB_STEP_SUMMARY"
+            git rebase --abort || true
+            exit 1
+          fi
 
       - name: Push rebased branch
+        if: steps.rebase.outputs.ok == 'true'
         run: git push --force-with-lease origin patched
+
+      - name: Close stale conflict issue on success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "rebase-conflict" --state open --json number -q '.[].number')
+          for id in $ids; do
+            gh issue close "$id" --repo "$GITHUB_REPOSITORY" \
+              --comment "Resolved: weekly rebase of \`patched\` onto upstream/main succeeded in run ${{ github.run_id }}."
+          done
+
+      - name: Open or update conflict issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="rebase-conflict: patched vs upstream/main"
+          body=$(cat <<EOF
+          ## Weekly rebase failed
+
+          The \`patched\` branch could not rebase onto \`hyprwm/hyprlock\` \`main\`.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ### Local fix
+
+          \`\`\`bash
+          cd ~/Engineering/Productivity/hyprlock
+          git fetch upstream main
+          git checkout patched
+          git rebase upstream/main
+          # resolve conflicts…
+          git push --force-with-lease origin patched
+          sync-hypr-patched.sh
+          \`\`\`
+          EOF
+          )
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "rebase-conflict" --state open --json number -q '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh label create "rebase-conflict" --repo "$GITHUB_REPOSITORY" --color "D93F0B" --description "patched branch failed to rebase onto upstream" 2>/dev/null || true
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label "rebase-conflict" --body "$body"
+          fi
