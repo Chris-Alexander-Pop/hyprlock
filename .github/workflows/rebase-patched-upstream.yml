@@ -1,7 +1,8 @@
 name: Rebase patched onto upstream
 
 # Weekly sync of the patched branch with hyprwm/hyprlock main.
-# On conflict: fail the job and open/update a tracking issue so it is visible.
+# On conflict: fail the job, write a job summary, and open/update a tracking
+# issue when the repo has issues enabled.
 
 on:
   schedule:
@@ -51,6 +52,7 @@ jobs:
               echo "## Status"
               git status || true
             } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::patched failed to rebase onto upstream/main — see job summary"
             git rebase --abort || true
             exit 1
           fi
@@ -64,6 +66,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          has_issues=$(gh api "repos/$GITHUB_REPOSITORY" --jq .has_issues)
+          if [[ "$has_issues" != "true" ]]; then
+            echo "Issues disabled on $GITHUB_REPOSITORY — skipping conflict-issue cleanup."
+            exit 0
+          fi
           ids=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "rebase-conflict" --state open --json number -q '.[].number')
           for id in $ids; do
             gh issue close "$id" --repo "$GITHUB_REPOSITORY" \
@@ -76,6 +84,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          has_issues=$(gh api "repos/$GITHUB_REPOSITORY" --jq .has_issues)
+          if [[ "$has_issues" != "true" ]]; then
+            echo "::warning::Issues disabled on $GITHUB_REPOSITORY — conflict details are in the job summary only."
+            exit 0
+          fi
           title="rebase-conflict: patched vs upstream/main"
           body=$(cat <<EOF
           ## Weekly rebase failed
