@@ -37,27 +37,19 @@ static void setMallocThreshold() {
 }
 
 static bool screencopyRequired() {
-    static const auto ANIMATIONSENABLED = g_pConfigManager->getValue<Hyprlang::INT>("animations:enabled");
     static const auto DISABLESC = g_pConfigManager->getValue<Hyprlang::INT>("general:disable_screencopy");
 
     if (*DISABLESC)
         return false;
 
-    const auto        FADEINCFG  = g_pConfigManager->m_AnimationTree.getConfig("fadeIn");
-    const auto        FADEOUTCFG = g_pConfigManager->m_AnimationTree.getConfig("fadeOut");
-
-    const bool        FADENEEDSSC = *ANIMATIONSENABLED &&
-        ((FADEINCFG->pValues && FADEINCFG->pValues->internalEnabled) || // fadeIn or fadeOut enabled
-         (FADEOUTCFG->pValues && FADEOUTCFG->pValues->internalEnabled));
-
-    if (FADENEEDSSC)
-        return true;
-
-    const auto BGSCREENSHOT = std::ranges::any_of(g_pConfigManager->getWidgetConfigs(), [](const auto& w) { //
+    // Fade-in used to force a desktop screenshot even with a static background.
+    // GPU screencopy of the Intel eDP through an NVIDIA renderer wedges the
+    // first lock frame on hybrid laptops (no mapped surface → Hyprland lockdead
+    // while fingerprint auth is still live). Only capture when a background
+    // actually asked for `path = screenshot`.
+    return std::ranges::any_of(g_pConfigManager->getWidgetConfigs(), [](const auto& w) {
         return w.type == "background" && std::string{std::any_cast<Hyprlang::STRING>(w.values.at("path"))} == "screenshot";
     });
-
-    return BGSCREENSHOT;
 }
 
 CHyprlock::CHyprlock(std::string_view wlDisplay, const bool immediateRender, const int graceSeconds) : m_screencopyRequired(screencopyRequired()) {

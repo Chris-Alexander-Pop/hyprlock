@@ -8,6 +8,7 @@ This branch tracks [hyprwm/hyprlock](https://github.com/hyprwm/hyprlock) `main` 
 | `fingerprint: call restart via CAuth without removed getImpl` | Route empty-Enter through `CAuth::restartFingerprint` (upstream removed `getImpl`). |
 | `fingerprint: USB-reset Validity via fingerprint-wake on empty Enter` | Empty Enter starts `fingerprint-wake.service` (usbreset 06cb:009a + restart python3-validity/open-fprintd), then re-claims after 3s. |
 | `fingerprint: auth:fingerprint:max_attempts` | Configurable fail limit (default 4). Set `0` for unlimited retries. |
+| `lock: do not GPU-screencopy for fade-in` | Fade used to force `zwlr_screencopy` even with a static background. That wedges the first lock frame on NVIDIA-render / Intel-scanout. |
 
 ## Updating from upstream
 
