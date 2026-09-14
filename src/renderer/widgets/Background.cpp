@@ -202,7 +202,7 @@ void CBackground::renderToFB(const CTexture& tex, CFramebuffer& fb, int passes, 
                                 .vibrancy          = vibrancy,
                                 .vibrancy_darkness = vibrancy_darkness,
                             });
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    g_pRenderer->restoreFb();
 }
 
 bool CBackground::draw(const SRenderData& data) {

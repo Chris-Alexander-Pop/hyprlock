@@ -94,6 +94,19 @@ void CSessionLockSurface::configure(const Vector2D& size_, uint32_t serial_) {
     if (eglWindow && eglSurface) {
         Log::logger->log(Log::INFO, "Resizing existing eglWindow");
         wl_egl_window_resize(eglWindow, size.x, size.y, 0, 0);
+    } else if (g_pEGL->needsShmPresent()) {
+        g_pEGL->makeCurrent(nullptr);
+        if (!offscreenFb.alloc(size.x, size.y, false, true)) {
+            Log::logger->log(Log::ERR, "Failed to allocate offscreen lock FBO");
+            readyForFrame = false;
+            return;
+        }
+        if (!shmPresent.ensure(size.x, size.y)) {
+            Log::logger->log(Log::ERR, "Failed to allocate shm lock buffers");
+            readyForFrame = false;
+            return;
+        }
+        Log::logger->log(Log::INFO, "Lock surface using shm present (hybrid GPU)");
     } else {
         if (eglWindow)
             wl_egl_window_destroy(eglWindow);
@@ -160,7 +173,13 @@ void CSessionLockSurface::render() {
         onCallback();
     });
 
-    if (!g_pEGL->swapBuffers(eglSurface)) {
+    if (eglSurface) {
+        if (!g_pEGL->swapBuffers(eglSurface)) {
+            frameCallback.reset();
+            needsFrame = true;
+            return;
+        }
+    } else if (!shmPresent.publish(surface, offscreenFb)) {
         frameCallback.reset();
         needsFrame = true;
         return;

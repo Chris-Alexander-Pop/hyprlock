@@ -9,6 +9,8 @@
 #include "../helpers/Math.hpp"
 #include <wayland-egl.h>
 #include <EGL/egl.h>
+#include "../renderer/Framebuffer.hpp"
+#include "ShmPresent.hpp"
 
 class COutput;
 class CRenderer;
@@ -40,7 +42,9 @@ class CSessionLockSurface {
     Vector2D                      size;
     Vector2D                      logicalSize;
     float                         appliedScale;
-    EGLSurface                    eglSurface      = nullptr;
+    EGLSurface                    eglSurface = nullptr;
+    mutable CFramebuffer          offscreenFb;
+    mutable CShmPresent           shmPresent;
     SP<CCWpFractionalScaleV1>     fractional      = nullptr;
     SP<CCWpViewport>              viewport        = nullptr;
     SP<CCHyprlandSurfaceV1>       hyprlandSurface = nullptr;

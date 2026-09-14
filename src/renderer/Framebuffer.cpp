@@ -19,11 +19,17 @@ static uint32_t glFormatToType(uint32_t gl) {
     return gl != GL_RGBA ? GL_UNSIGNED_INT_2_10_10_10_REV : GL_UNSIGNED_BYTE;
 }
 
-bool CFramebuffer::alloc(int w, int h, bool highres) {
+bool CFramebuffer::alloc(int w, int h, bool highres, bool rgba8) {
     bool     firstAlloc = false;
+    GLint    prevFb     = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFb);
 
-    uint32_t glFormat = highres ? GL_RGBA16F : drmFormatToGL(DRM_FORMAT_XRGB2101010); // TODO: revise only 10b when I find a way to figure out without sc whether display is 10b
-    uint32_t glType   = highres ? GL_FLOAT : glFormatToType(glFormat);
+    uint32_t glFormat = GL_RGBA8;
+    uint32_t glType   = GL_UNSIGNED_BYTE;
+    if (!rgba8) {
+        glFormat = highres ? GL_RGBA16F : drmFormatToGL(DRM_FORMAT_XRGB2101010); // TODO: revise only 10b when I find a way to figure out without sc whether display is 10b
+        glType   = highres ? GL_FLOAT : glFormatToType(glFormat);
+    }
 
     if (m_iFb == (uint32_t)-1) {
         firstAlloc = true;
@@ -67,7 +73,7 @@ bool CFramebuffer::alloc(int w, int h, bool highres) {
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFb);
 
     m_vSize = Vector2D(w, h);
 
@@ -80,6 +86,9 @@ void CFramebuffer::addStencil() {
         return;
     }
 
+    GLint prevFb = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFb);
+
     glBindTexture(GL_TEXTURE_2D, m_pStencilTex->m_iTexID);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, m_vSize.x, m_vSize.y, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, nullptr);
 
@@ -91,11 +100,11 @@ void CFramebuffer::addStencil() {
     RASSERT((status == GL_FRAMEBUFFER_COMPLETE), "Failed adding a stencil to fbo! (FB status: {})", status);
 
     glBindTexture(GL_TEXTURE_2D, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFb);
 }
 
 void CFramebuffer::bind() const {
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_iFb);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_iFb);
     glViewport(0, 0, m_vSize.x, m_vSize.y);
 }
 
