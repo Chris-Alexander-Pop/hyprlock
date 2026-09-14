@@ -1,6 +1,8 @@
 #include "Output.hpp"
 #include "../helpers/Log.hpp"
 #include "hyprlock.hpp"
+#include <cstdlib>
+#include <string>
 
 void COutput::create(WP<COutput> pSelf, SP<CCWlOutput> pWlOutput, uint32_t _name) {
     m_ID       = _name;
@@ -49,6 +51,26 @@ void COutput::createSessionLockSurface() {
     if (!m_self.valid()) {
         Log::logger->log(Log::ERR, "output {} dead??", m_ID);
         return;
+    }
+
+    if (const char* skip = getenv("HYPRLOCK_SKIP_OUTPUTS"); skip && *skip) {
+        const std::string list = skip;
+        const std::string port = stringPort.empty() ? stringName : stringPort;
+        for (size_t start = 0; start < list.size();) {
+            const size_t comma = list.find(',', start);
+            std::string  tok   = list.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+            while (!tok.empty() && tok.front() == ' ')
+                tok.erase(tok.begin());
+            while (!tok.empty() && tok.back() == ' ')
+                tok.pop_back();
+            if (!tok.empty() && (port == tok || stringName == tok)) {
+                Log::logger->log(Log::INFO, "output {} skipped (HYPRLOCK_SKIP_OUTPUTS)", port);
+                return;
+            }
+            if (comma == std::string::npos)
+                break;
+            start = comma + 1;
+        }
     }
 
     if (m_sessionLockSurface) {

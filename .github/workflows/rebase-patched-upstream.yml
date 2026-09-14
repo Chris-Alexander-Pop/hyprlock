@@ -100,7 +100,7 @@ jobs:
           ### Local fix
 
           \`\`\`bash
-          cd ~/Engineering/Productivity/hyprlock
+          cd ~/Engineering/hyprlock
           git fetch upstream main
           git checkout patched
           git rebase upstream/main

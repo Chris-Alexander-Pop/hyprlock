@@ -224,7 +224,7 @@ bool CPasswordInputField::draw(const SRenderData& data) {
             if (hiddenInputState.lastQuadrant % 2 == 1)
                 outerBoxScaled.x += outerBoxScaled.w;
             glEnable(GL_SCISSOR_TEST);
-            glScissor(outerBoxScaled.x, outerBoxScaled.y, outerBoxScaled.w, outerBoxScaled.h);
+            g_pRenderer->scissorBox(outerBoxScaled, viewport);
             g_pRenderer->renderBorder(outerBox, hiddenInputState.lastColor, outThick, OUTERROUND, fade.a->value() * data.opacity);
             glScissor(0, 0, viewport.x, viewport.y);
             glDisable(GL_SCISSOR_TEST);
@@ -316,7 +316,7 @@ bool CPasswordInputField::draw(const SRenderData& data) {
 
             // Cut the texture to the width of the input field
             glEnable(GL_SCISSOR_TEST);
-            glScissor(inputFieldBox.x, inputFieldBox.y, inputFieldBox.w, inputFieldBox.h);
+            g_pRenderer->scissorBox(inputFieldBox, viewport);
             g_pRenderer->renderTexture(ASSETBOX, *currAsset, data.opacity * fade.a->value(), 0);
             glScissor(0, 0, viewport.x, viewport.y);
             glDisable(GL_SCISSOR_TEST);

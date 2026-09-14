@@ -33,6 +33,8 @@ class CRenderer {
     void            renderRect(const CBox& box, const CHyprColor& col, int rounding = 0);
     void            renderBorder(const CBox& box, const CGradientValueData& gradient, int thickness, int rounding = 0, float alpha = 1.0);
     void            renderTexture(const CBox& box, const CTexture& tex, float a = 1.0, int rounding = 0, std::optional<eTransform> tr = {});
+    // Widget coords are top-left. Offscreen FBOs are bottom-left (glScissor).
+    void            scissorBox(const CBox& box, const Vector2D& viewport);
     void renderTextureMix(const CBox& box, const CTexture& tex, const CTexture& tex2, float a = 1.0, float mixFactor = 0.0, int rounding = 0, std::optional<eTransform> tr = {});
     void blurFB(const CFramebuffer& outfb, SBlurParams params);
 
@@ -40,6 +42,7 @@ class CRenderer {
 
     void                                  pushFb(GLint fb);
     void                                  popFb();
+    void                                  restoreFb();
 
     void                                  removeWidgetsFor(OUTPUTID id);
     void                                  reconfigureWidgetsFor(OUTPUTID id);
@@ -67,6 +70,7 @@ class CRenderer {
     PHLANIMVAR<float>  opacity;
 
     std::vector<GLint> boundFBs;
+    GLint              m_defaultFb = 0;
 };
 
 inline UP<CRenderer> g_pRenderer;

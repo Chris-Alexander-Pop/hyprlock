@@ -224,7 +224,11 @@ void CFingerprint::handleVerifyStatus(const std::string& result, bool done) {
         return;
     }
     switch (matchResult) {
-        case MATCH_INVALID: Log::logger->log(Log::WARN, "fprint: unknown status: {}", result); break;
+        case MATCH_INVALID:
+            Log::logger->log(Log::WARN, "fprint: unknown status: {}", result);
+            stopVerify();
+            m_sFailureReason = "Fingerprint did not match";
+            break;
         case MATCH_NO_MATCH: {
             stopVerify();
             static const auto MAXATTEMPTS = g_pConfigManager->getValue<Hyprlang::INT>("auth:fingerprint:max_attempts");
@@ -245,24 +249,29 @@ void CFingerprint::handleVerifyStatus(const std::string& result, bool done) {
             break;
         case MATCH_MATCHED:
             stopVerify();
-            authenticated = true;
+            authenticated    = true;
+            m_sFailureReason.clear();
             g_pAuth->enqueueUnlock();
             break;
         case MATCH_RETRY:
-            retry     = true;
-            m_sPrompt = "Please retry fingerprint scan";
+            retry            = true;
+            m_sPrompt        = "Please retry fingerprint scan";
+            m_sFailureReason = "Fingerprint did not match";
             break;
         case MATCH_SWIPE_TOO_SHORT:
-            retry     = true;
-            m_sPrompt = "Swipe too short - try again";
+            retry            = true;
+            m_sPrompt        = "Swipe too short - try again";
+            m_sFailureReason = "Swipe too short - try again";
             break;
         case MATCH_FINGER_NOT_CENTERED:
-            retry     = true;
-            m_sPrompt = "Finger not centered - try again";
+            retry            = true;
+            m_sPrompt        = "Finger not centered - try again";
+            m_sFailureReason = "Finger not centered - try again";
             break;
         case MATCH_REMOVE_AND_RETRY:
-            retry     = true;
-            m_sPrompt = "Remove your finger and try again";
+            retry            = true;
+            m_sPrompt        = "Remove your finger and try again";
+            m_sFailureReason = "Remove your finger and try again";
             break;
         case MATCH_DISCONNECTED:
             m_sFailureReason   = "Fingerprint device disconnected";
@@ -270,7 +279,7 @@ void CFingerprint::handleVerifyStatus(const std::string& result, bool done) {
             break;
     }
 
-    if (!authenticated && !retry)
+    if (!authenticated && !m_sFailureReason.empty())
         g_pAuth->enqueueFail(m_sFailureReason, AUTH_IMPL_FINGERPRINT);
     else if (retry)
         g_pHyprlock->enqueueForceUpdateTimers();

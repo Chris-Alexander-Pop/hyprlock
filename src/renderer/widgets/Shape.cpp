@@ -69,7 +69,7 @@ bool CShape::draw(const SRenderData& data) {
         }
 
         glEnable(GL_SCISSOR_TEST);
-        glScissor(shapeBox.x, shapeBox.y, shapeBox.width, shapeBox.height);
+        g_pRenderer->scissorBox(shapeBox, viewport);
         glClearColor(0.0, 0.0, 0.0, 0.0);
         glClear(GL_COLOR_BUFFER_BIT);
         glDisable(GL_SCISSOR_TEST);

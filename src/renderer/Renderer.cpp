@@ -205,9 +205,17 @@ CRenderer::SRenderFeedback CRenderer::renderLock(const CSessionLockSurface& surf
     g_pEGL->makeCurrent(surf.eglSurface);
     glViewport(0, 0, surf.size.x, surf.size.y);
 
-    GLint fb = 0;
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fb);
-    pushFb(fb);
+    if (g_pEGL->needsShmPresent()) {
+        surf.offscreenFb.alloc(surf.size.x, surf.size.y, false, true);
+        surf.offscreenFb.bind();
+        m_defaultFb = surf.offscreenFb.m_iFb;
+        pushFb(surf.offscreenFb.m_iFb);
+    } else {
+        m_defaultFb = 0;
+        GLint fb    = 0;
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &fb);
+        pushFb(fb);
+    }
 
     glClearColor(0.0, 0.0, 0.0, 0.0);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -223,8 +231,16 @@ CRenderer::SRenderFeedback CRenderer::renderLock(const CSessionLockSurface& surf
     }
 
     glDisable(GL_BLEND);
+    popFb();
 
     return feedback;
+}
+
+void CRenderer::scissorBox(const CBox& box, const Vector2D& viewport) {
+    int y = static_cast<int>(box.y);
+    if (g_pEGL && g_pEGL->needsShmPresent())
+        y = static_cast<int>(viewport.y - box.y - box.h);
+    glScissor(static_cast<int>(box.x), y, static_cast<int>(box.w), static_cast<int>(box.h));
 }
 
 void CRenderer::renderRect(const CBox& box, const CHyprColor& col, int rounding) {
@@ -580,12 +596,16 @@ void CRenderer::blurFB(const CFramebuffer& outfb, SBlurParams params) {
 
 void CRenderer::pushFb(GLint fb) {
     boundFBs.push_back(fb);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fb);
+    glBindFramebuffer(GL_FRAMEBUFFER, fb);
 }
 
 void CRenderer::popFb() {
     boundFBs.pop_back();
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, boundFBs.empty() ? 0 : boundFBs.back());
+    restoreFb();
+}
+
+void CRenderer::restoreFb() {
+    glBindFramebuffer(GL_FRAMEBUFFER, boundFBs.empty() ? m_defaultFb : boundFBs.back());
 }
 
 void CRenderer::removeWidgetsFor(OUTPUTID id) {
