@@ -41,16 +41,16 @@ void CLabel::onTimerUpdate() {
         return;
 
     // request new
-    request.text      = label.formatted;
+    request.text      = label.formatted.empty() ? " " : label.formatted;
     m_pendingResource = true;
 
     AWP<IWidget> widget(m_self);
     if (label.cmd) {
         // Don't increment by one to avoid clashes with multiple widget using the same label command.
         m_dynamicRevision += (label.updateEveryMs == 0) ? 1 : label.updateEveryMs;
-        g_asyncResourceManager->requestTextCmd(request, m_dynamicRevision, widget.lock());
+        resourceID = g_asyncResourceManager->requestTextCmd(request, m_dynamicRevision, widget.lock());
     } else
-        g_asyncResourceManager->requestText(request, widget.lock());
+        resourceID = g_asyncResourceManager->requestText(request, widget.lock());
 }
 
 void CLabel::plantTimer() {
@@ -85,7 +85,7 @@ void CLabel::configure(const std::unordered_map<std::string, std::any>& props, c
 
         label = formatString(labelPreFormat);
 
-        request.text     = label.formatted;
+        request.text     = label.formatted.empty() ? " " : label.formatted;
         request.font     = fontFamily;
         request.fontSize = fontSize;
         request.color    = labelColor.asRGB();
@@ -102,10 +102,11 @@ void CLabel::configure(const std::unordered_map<std::string, std::any>& props, c
 
     pos = configPos; // Label size not known yet
 
+    AWP<IWidget> widget(m_self);
     if (label.cmd) {
-        resourceID = g_asyncResourceManager->requestTextCmd(request, m_dynamicRevision, nullptr);
+        resourceID = g_asyncResourceManager->requestTextCmd(request, m_dynamicRevision, widget.lock());
     } else
-        resourceID = g_asyncResourceManager->requestText(request, nullptr);
+        resourceID = g_asyncResourceManager->requestText(request, widget.lock());
 
     plantTimer();
 }

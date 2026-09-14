@@ -93,6 +93,7 @@ static void passwordFailCallback(ASP<CTimer> self, void* data) {
 static void displayFailTimeoutCallback(ASP<CTimer> self, void* data) {
     if (g_pAuth->m_bDisplayFailText) {
         g_pAuth->m_bDisplayFailText = false;
+        g_pHyprlock->enqueueForceUpdateTimers();
         g_pHyprlock->renderAllOutputs();
     }
 }

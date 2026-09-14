@@ -9,6 +9,10 @@ This branch tracks [hyprwm/hyprlock](https://github.com/hyprwm/hyprlock) `main` 
 | `fingerprint: USB-reset Validity via fingerprint-wake on empty Enter` | Empty Enter starts `fingerprint-wake.service` (usbreset 06cb:009a + restart python3-validity/open-fprintd), then re-claims after 3s. |
 | `fingerprint: auth:fingerprint:max_attempts` | Configurable fail limit (default 4). Set `0` for unlimited retries. |
 | `lock: do not GPU-screencopy for fade-in` | Fade used to force `zwlr_screencopy` even with a static background. That wedges the first lock frame on NVIDIA-render / Intel-scanout. |
+| `lock: skip outputs via HYPRLOCK_SKIP_OUTPUTS` | Comma-separated `wl_output` names. Aura no longer sets this. HDMI stays on so the lock UI and keyboard exist on the HP too. |
+| `lock: GBM EGL + wl_shm present` | `HYPRLOCK_GBM_DEVICE` (or Wayland-EGL fallback) renders to an FBO and publishes `wl_shm`. NVIDIA `wl_egl_window` swap is incomplete on Intel eDP. |
+| `lock: scissor FBO Y origin` | Password/fail text uses `glScissor` in widget (top-left) space. Offscreen FBOs are bottom-left, so the field was clipping its own placeholder and `$FAIL`. |
+| `fingerprint: show reject on retry` | `verify-retry-*` and unknown fprintd statuses set `$FPRINTFAIL` / enqueue PAM-style fail so a rejected scan is visible. |
 
 ## Updating from upstream
 
