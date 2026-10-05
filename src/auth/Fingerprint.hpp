@@ -26,12 +26,16 @@ class CFingerprint : public IAuthImplementation {
     struct SDBUSState {
         std::unique_ptr<sdbus::IProxy> device;
 
-        bool                           abort     = false;
-        bool                           done      = false;
-        int                            retries   = 0;
-        bool                           sleeping  = false;
-        bool                           verifying = false;
-        bool                           waking    = false;
+        bool                           abort            = false;
+        bool                           done             = false;
+        int                            retries          = 0;
+        bool                           sleeping         = false;
+        bool                           verifying        = false;
+        bool                           waking           = false;
+        bool                           hardWaking       = false;
+        bool                           userRearm        = false;
+        int                            hardWakeAttempts = 0;
+        int                            wakePolls        = 0;
     } m_sDBUSState;
 
     std::string m_sFingerprintReady;
@@ -42,9 +46,14 @@ class CFingerprint : public IAuthImplementation {
 
     void        handleVerifyStatus(const std::string& result, const bool done);
 
+    bool        devicePresent();
     bool        createDeviceProxy();
     void        claimDevice();
     void        startVerify(bool isRetry = false);
     bool        stopVerify();
     bool        releaseDevice();
+    void        softRearm();
+    void        beginHardWake();
+    void        scheduleWakePoll();
+    void        pollHardWake();
 };

@@ -6,7 +6,7 @@ This branch tracks [hyprwm/hyprlock](https://github.com/hyprwm/hyprlock) `main` 
 |--------|---------|
 | `fingerprint: restart verify on empty Enter` | Empty Enter re-claims/restarts fprintd verify so a wedged reader can be woken without a PAM failure flash. |
 | `fingerprint: call restart via CAuth without removed getImpl` | Route empty-Enter through `CAuth::restartFingerprint` (upstream removed `getImpl`). |
-| `fingerprint: USB-reset Validity via fingerprint-wake on empty Enter` | Empty Enter starts `fingerprint-wake.service` (usbreset 06cb:009a + restart python3-validity/open-fprintd), then re-claims after 3s. |
+| `fingerprint: USB-reset Validity via fingerprint-wake on empty Enter` | Empty Enter used to always USB-reset and wait 3s. A live reader stays up (second Enter within 1.2s soft-rearms). USB reset only if Claim fails, then hyprlock polls until the device is back. |
 | `fingerprint: auth:fingerprint:max_attempts` | Configurable fail limit (default 4). Set `0` for unlimited retries. |
 | `lock: do not GPU-screencopy for fade-in` | Fade used to force `zwlr_screencopy` even with a static background. That wedges the first lock frame on NVIDIA-render / Intel-scanout. |
 | `lock: skip outputs via HYPRLOCK_SKIP_OUTPUTS` | Comma-separated `wl_output` names. Aura no longer sets this. HDMI stays on so the lock UI and keyboard exist on the HP too. |

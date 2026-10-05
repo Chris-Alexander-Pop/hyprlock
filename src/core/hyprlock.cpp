@@ -670,8 +670,8 @@ void CHyprlock::handleKeySym(xkb_keysym_t sym, bool composed) {
 
         if (m_sPasswordState.passBuffer.empty() && *IGNOREEMPTY) {
             Log::logger->log(Log::INFO, "Ignoring empty input");
-            // Still restart fingerprint verify so Enter can wake a wedged reader
-            // without triggering a PAM failure flash.
+            // Empty Enter nudges the reader. A live verify session stays up;
+            // USB reset is only the fallback when the device is actually gone.
             g_pAuth->restartFingerprint();
             return;
         }
