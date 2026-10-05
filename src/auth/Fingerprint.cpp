@@ -5,6 +5,7 @@
 #include "../helpers/MiscFunctions.hpp"
 #include "../config/ConfigManager.hpp"
 
+#include <chrono>
 #include <memory>
 #include <unistd.h>
 #include <pwd.h>
@@ -106,8 +107,7 @@ void CFingerprint::init() {
 }
 
 void CFingerprint::handleInput(const std::string& input) {
-    // Non-empty input is password auth — leave the parallel fingerprint session alone.
-    // Empty Enter: USB-reset Validity (via fingerprint-wake.service) then re-claim.
+    // Non-empty input is password auth. Leave the parallel fingerprint session alone.
     if (!input.empty())
         return;
 
@@ -121,32 +121,98 @@ void CFingerprint::handleInput(const std::string& input) {
         return;
     }
 
-    Log::logger->log(Log::INFO, "fprint: restarting verify on empty input");
+    // A live verify is already waiting for a finger. USB-resetting it (the old
+    // empty-Enter path) took several seconds and often lost the device.
+    // A second Enter within 1.2s soft-rearms without touching USB.
+    static auto lastNudge = std::chrono::steady_clock::time_point{};
+    const auto  now       = std::chrono::steady_clock::now();
+    if (m_sDBUSState.verifying && m_sDBUSState.device) {
+        if (lastNudge.time_since_epoch().count() == 0 || now - lastNudge > std::chrono::milliseconds(1200)) {
+            lastNudge = now;
+            Log::logger->log(Log::INFO, "fprint: already verifying");
+            m_sPrompt = "Reader is listening";
+            g_pHyprlock->enqueueForceUpdateTimers();
+            return;
+        }
+        Log::logger->log(Log::INFO, "fprint: soft rearm");
+    } else {
+        Log::logger->log(Log::INFO, "fprint: rearm verify");
+    }
 
+    lastNudge                         = now;
+    m_sDBUSState.hardWakeAttempts     = 0;
+    m_sPrompt                         = "Waking fingerprint…";
+    g_pHyprlock->enqueueForceUpdateTimers();
+    softRearm();
+}
+
+void CFingerprint::softRearm() {
     m_sDBUSState.waking    = true;
+    m_sDBUSState.userRearm = true;
     m_sDBUSState.abort     = false;
     m_sDBUSState.done      = false;
     m_sDBUSState.retries   = 0;
     m_sDBUSState.verifying = false;
     m_sFailureReason.clear();
-    m_sPrompt = "Waking fingerprint…";
+    stopVerify();
+    releaseDevice();
+    startVerify();
+}
+
+void CFingerprint::beginHardWake() {
+    if (m_sDBUSState.hardWaking)
+        return;
+
+    if (m_sDBUSState.hardWakeAttempts >= 1) {
+        m_sDBUSState.waking = false;
+        m_sPrompt           = "Fingerprint reader still offline";
+        g_pHyprlock->enqueueForceUpdateTimers();
+        return;
+    }
+
+    m_sDBUSState.hardWakeAttempts++;
+    m_sDBUSState.hardWaking = true;
+    m_sDBUSState.userRearm  = false;
+    m_sDBUSState.waking     = true;
+    m_sDBUSState.wakePolls  = 0;
+    m_sDBUSState.verifying  = false;
+    m_sFailureReason.clear();
+    m_sPrompt = "Resetting fingerprint reader…";
     g_pHyprlock->enqueueForceUpdateTimers();
 
+    Log::logger->log(Log::INFO, "fprint: device missing, USB wake");
     stopVerify();
     releaseDevice();
 
     // Passwordless via polkit rule 50-fingerprint-wake.rules
     spawnAsync("systemctl start --no-block fingerprint-wake.service");
+    scheduleWakePoll();
+}
 
-    // Validity USB init needs a couple seconds after reset before Claim works.
-    g_pHyprlock->addTimer(
-        std::chrono::milliseconds(3000),
-        [](ASP<CTimer> self, void* data) {
-            auto* fp                 = static_cast<CFingerprint*>(data);
-            fp->m_sDBUSState.waking = false;
-            fp->startVerify();
-        },
-        this);
+void CFingerprint::scheduleWakePoll() {
+    g_pHyprlock->addTimer(std::chrono::milliseconds(200), [](ASP<CTimer> self, void* data) { static_cast<CFingerprint*>(data)->pollHardWake(); }, this);
+}
+
+void CFingerprint::pollHardWake() {
+    if (!m_sDBUSState.hardWaking)
+        return;
+
+    if (++m_sDBUSState.wakePolls > 40) {
+        Log::logger->log(Log::WARN, "fprint: USB wake timed out");
+        m_sDBUSState.hardWaking = false;
+        m_sDBUSState.waking     = false;
+        m_sPrompt               = "Fingerprint reader still offline";
+        g_pHyprlock->enqueueForceUpdateTimers();
+        return;
+    }
+
+    if (!devicePresent()) {
+        scheduleWakePoll();
+        return;
+    }
+
+    Log::logger->log(Log::INFO, "fprint: device back after {} polls", m_sDBUSState.wakePolls);
+    startVerify();
 }
 
 std::optional<std::string> CFingerprint::getLastFailText() {
@@ -170,14 +236,36 @@ void CFingerprint::terminate() {
         releaseDevice();
 }
 
+bool CFingerprint::devicePresent() {
+    if (!g_dbus->m_connection)
+        return false;
+
+    auto              proxy = sdbus::createProxy(*g_dbus->m_connection, FPRINT, sdbus::ObjectPath{"/net/reactivated/Fprint/Manager"});
+    sdbus::ObjectPath path;
+    try {
+        // Short timeout so a restarting daemon cannot freeze the lock UI.
+        proxy->callMethod("GetDefaultDevice").onInterface(MANAGER).withTimeout(std::chrono::milliseconds(300)).storeResultsTo(path);
+    } catch (sdbus::Error& e) {
+        return false;
+    }
+    return true;
+}
+
 bool CFingerprint::createDeviceProxy() {
     auto              proxy = sdbus::createProxy(*g_dbus->m_connection, FPRINT, sdbus::ObjectPath{"/net/reactivated/Fprint/Manager"});
 
     sdbus::ObjectPath path;
     try {
-        proxy->callMethod("GetDefaultDevice").onInterface(MANAGER).storeResultsTo(path);
+        proxy->callMethod("GetDefaultDevice").onInterface(MANAGER).withTimeout(std::chrono::milliseconds(800)).storeResultsTo(path);
     } catch (sdbus::Error& e) {
         Log::logger->log(Log::WARN, "fprint: couldn't connect to Fprint service ({})", e.what());
+        m_sDBUSState.verifying = false;
+        if (m_sDBUSState.hardWaking)
+            scheduleWakePoll();
+        else if (m_sDBUSState.userRearm)
+            beginHardWake();
+        else
+            m_sDBUSState.waking = false;
         return false;
     }
     Log::logger->log(Log::INFO, "fprint: using device path {}", path.c_str());
@@ -291,9 +379,17 @@ void CFingerprint::handleVerifyStatus(const std::string& result, bool done) {
 void CFingerprint::claimDevice() {
     const auto currentUser = ""; // Empty string means use the caller's id.
     m_sDBUSState.device->callMethodAsync("Claim").onInterface(DEVICE).withArguments(currentUser).uponReplyInvoke([this](std::optional<sdbus::Error> e) {
-        if (e)
+        if (e) {
             Log::logger->log(Log::WARN, "fprint: could not claim device, {}", e->what());
-        else {
+            m_sDBUSState.verifying = false;
+            releaseDevice();
+            if (m_sDBUSState.hardWaking)
+                scheduleWakePoll();
+            else if (m_sDBUSState.userRearm)
+                beginHardWake();
+            else
+                m_sDBUSState.waking = false;
+        } else {
             Log::logger->log(Log::INFO, "fprint: claimed device");
             startVerify();
         }
@@ -313,11 +409,21 @@ void CFingerprint::startVerify(bool isRetry) {
     m_sDBUSState.device->callMethodAsync("VerifyStart").onInterface(DEVICE).withArguments(finger).uponReplyInvoke([this, isRetry](std::optional<sdbus::Error> e) {
         if (e) {
             Log::logger->log(Log::WARN, "fprint: could not start verifying, {}", e->what());
+            m_sDBUSState.verifying = false;
             if (isRetry)
                 m_sFailureReason = "Fingerprint auth disabled (failed to restart)";
-
+            else if (m_sDBUSState.hardWaking) {
+                releaseDevice();
+                scheduleWakePoll();
+            } else if (m_sDBUSState.userRearm)
+                beginHardWake();
+            else
+                m_sDBUSState.waking = false;
         } else {
             Log::logger->log(Log::INFO, "fprint: started verifying");
+            m_sDBUSState.waking     = false;
+            m_sDBUSState.hardWaking = false;
+            m_sDBUSState.userRearm  = false;
             if (isRetry) {
                 m_sDBUSState.retries++;
                 m_sPrompt = "Could not match fingerprint. Try again.";
